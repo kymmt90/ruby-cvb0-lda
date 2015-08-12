@@ -13,7 +13,7 @@ class LDA
     @num_topics = num_topics
     @alpha = alpha
     @beta  = beta
-    @gamma_dvt = []
+    @gamma_dvt = {}
     @random = SimpleRandom.new
   end
 
@@ -56,7 +56,7 @@ class LDA
         count = doc[vocab]
         gamma_vt[vocab] = gamma_vt[vocab].map { |val| val / count }
       end
-      @gamma_dvt << gamma_vt
+      @gamma_dvt[doc_index] = gamma_vt
     end
   end
 
@@ -71,23 +71,21 @@ class LDA
 
   def cvb0
     new_n_dt = Hash.new do |h, k|
-      h[k] = Matrix.row_vector([0.0] * @num_topics)
+      h[k] = Matrix.row_vector([@alpha] * @num_topics)
     end
     new_n_vt = Hash.new do |h, k|
-      h[k] = Matrix.row_vector([0.0] * @num_topics)
+      h[k] = Matrix.row_vector([@beta] * @num_topics)
     end
 
     @dataset.each_doc_with_index do |doc, doc_index|
-      gamma_ik = @gamma_dvt[doc_index - 1]
-      n_dt = Vector[*@n_dt[doc_index].to_a.flatten]
+      gamma_vt = @gamma_dvt[doc_index]
 
-      gamma_ik.each_pair do |vocab, gamma_k|
-        new_gamma_k = update(vocab, gamma_k, n_dt)
-        gamma_ik[vocab] = new_gamma_k.covector
-
+      gamma_vt.each_pair do |vocab, gamma_t|
+        new_gamma_t = update(doc_index, vocab, gamma_t)
+        gamma_vt[vocab] = new_gamma_t.covector
         count = doc[vocab]
-        new_n_vt[vocab] += count * new_gamma_k.covector
-        new_n_dt[doc_index] += count * new_gamma_k.covector
+        new_n_vt[vocab]     += count * new_gamma_t.covector
+        new_n_dt[doc_index] += count * new_gamma_t.covector
       end
     end
 
@@ -104,17 +102,18 @@ class LDA
     @n_t = Matrix.row_vector(new_n_t)
   end
 
-  def update(vocab, gamma_k, n_dt)
+  def update(doc_index, vocab, gamma_k)
+    n_dt = Vector[*@n_dt[doc_index].to_a.flatten]
+
     new_gamma_k = Vector[*(@n_vt[vocab] - gamma_k).to_a.flatten]
-    new_gamma_k.dot(n_dt - Vector[*gamma_k.to_a.flatten])
+    new_gamma_k = new_gamma_k.map2(n_dt - Vector[*gamma_k.to_a.flatten]) { |x, y| x * y }
     denominator = Vector[*(@n_t - gamma_k).to_a.flatten].map { |val| 1.0 / val }
-    new_gamma_k.dot(denominator)
+    new_gamma_k = new_gamma_k.map2(denominator) { |x, y| x * y }
     gamma_sum = new_gamma_k.to_a.flatten.inject(0.0) { |sum, val| sum + val }
-    new_gamma_k /= gamma_sum
-    new_gamma_k
+    new_gamma_k.map { |x| x / gamma_sum }
   end
 
-  def vocabs_in(topic, num = 10)
+  def each_vocab_in_topic(topic, num = 10)
     vocab_probs = Hash.new { |h, k| h[k] = 0.0 }
     @dataset.vocabs.each do |v, v_id|
       vocab_probs[v] = phi(topic, v_id)
@@ -129,18 +128,18 @@ class LDA
   def print_result
     0.upto(@num_topics - 1) do |t|
       top_vocabs = []
-      vocabs_in(t) { |v| top_vocabs << v }
+      each_vocab_in_topic(t) { |v| top_vocabs << v }
       puts "Topic #{t + 1}: [#{top_vocabs.join(' ')}]"
     end
   end
 
   def perplexity
     log_ll = 0.0
-    @dataset.dataset.each do |d, words|
-      words.each do |w|
-        log_ll += [*0...@num_topics]
-                  .inject(0.0) { |s, t| s + theta(d, t) * phi(t, w) }
-                  .tap { |sum| return Math.log(sum) }
+    @dataset.each_doc_with_index do |doc, doc_index|
+      doc.each_pair do |vocab, count|
+        ll = [*0...@num_topics]
+             .inject(0.0) { |sum, topic| sum + theta(doc_index, topic) * phi(topic, vocab) }
+        log_ll += count * Math.log(ll)
       end
     end
     Math.exp(-log_ll / @dataset.num_words)

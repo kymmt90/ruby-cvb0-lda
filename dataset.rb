@@ -30,9 +30,15 @@ class Dataset
     read_docword(docword_file)
   end
 
+  def each_doc
+    1.upto(@num_docs) do |doc_index|
+      yield @dataset[doc_index]
+    end
+  end
+
   def each_doc_with_index
     1.upto(@num_docs) do |doc_index|
-      yield @dataset[doc_index], doc_index if block_given?
+      yield @dataset[doc_index], doc_index
     end
   end
 

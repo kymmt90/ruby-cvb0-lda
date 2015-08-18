@@ -5,7 +5,7 @@ require 'matrix'
 require 'simple-random'
 
 class LDA
-  attr_reader   :num_topics, :num_docs, :num_vocabs, :num_words
+  attr_reader   :num_topics
   attr_accessor :alpha, :beta
   attr_reader   :gamma_dvt, :n_dt, :n_vt, :n_t
 
@@ -27,14 +27,20 @@ class LDA
     @dataset.read(docword_file, vocab_file)
   end
 
+  def num_docs
+    @dataset.num_docs
+  end
+
+  def num_vocabs
+    @dataset.num_vocabs
+  end
+
+  def num_words
+    @dataset.num_words
+  end
+
   def initialize_parameters
-    @n_dt = Hash.new do |h, k|
-      h[k] = Matrix.row_vector([@alpha] * @num_topics)
-    end
-    @n_vt = Hash.new do |h, k|
-      h[k] = Matrix.row_vector([@beta] * @num_topics)
-    end
-    @n_t = Matrix.row_vector([@beta * @dataset.num_vocabs] * @num_topics)
+    build_parameter_containers
 
     @dataset.each_doc_with_index do |doc, doc_index|
       gamma_vt = Hash.new do |h, k|
@@ -42,14 +48,13 @@ class LDA
       end
 
       doc.each_key do |vocab|
-        init_gamma_t = @random.dirichlet(*([@alpha] * @num_topics))
-        init_gamma_t = Matrix.row_vector(init_gamma_t)
-
         count = doc[vocab]
-        gamma_vt[vocab] += init_gamma_t * count
-        @n_vt[vocab] += count * init_gamma_t
-        @n_dt[doc_index] += count * init_gamma_t
-        @n_t += count * init_gamma_t
+        init_gamma_t = count * initial_gamma_vector
+
+        gamma_vt[vocab]  += init_gamma_t
+        @n_vt[vocab]     += init_gamma_t
+        @n_dt[doc_index] += init_gamma_t
+        @n_t             += init_gamma_t
       end
 
       gamma_vt.each_key do |vocab|
@@ -60,8 +65,22 @@ class LDA
     end
   end
 
+  def build_parameter_containers
+    @n_dt = Hash.new do |h, k|
+      h[k] = Matrix.row_vector([@alpha] * @num_topics)
+    end
+    @n_vt = Hash.new do |h, k|
+      h[k] = Matrix.row_vector([@beta] * @num_topics)
+    end
+    @n_t = Matrix.row_vector([@beta * @dataset.num_vocabs] * @num_topics)
+  end
+
+  def initial_gamma_vector
+    Matrix.row_vector(@random.dirichlet(*([@alpha] * @num_topics)))
+  end
+
   def theta(doc, topic)
-    denominator = @n_dt[doc].to_a.flatten.inject(0.0) { |sum, val| sum + val }
+    denominator = @n_dt[doc].to_a.flatten.reduce(:+)
     @n_dt[doc][0, topic] / denominator
   end
 
@@ -109,7 +128,7 @@ class LDA
     new_gamma_k = new_gamma_k.map2(n_dt - Vector[*gamma_k.to_a.flatten]) { |x, y| x * y }
     denominator = Vector[*(@n_t - gamma_k).to_a.flatten].map { |val| 1.0 / val }
     new_gamma_k = new_gamma_k.map2(denominator) { |x, y| x * y }
-    gamma_sum = new_gamma_k.to_a.flatten.inject(0.0) { |sum, val| sum + val }
+    gamma_sum = new_gamma_k.to_a.flatten.reduce(:+)
     new_gamma_k.map { |x| x / gamma_sum }
   end
 

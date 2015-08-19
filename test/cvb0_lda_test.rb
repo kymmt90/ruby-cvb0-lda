@@ -7,7 +7,7 @@ class Cvb0LDATest < Test::Unit::TestCase
   class << self
     def startup
       @@sut = LDA.new(10)
-      @@sut.read('docword.kos.txt', 'vocab.kos.txt')
+      @@sut.read('docword.kos.small.txt', 'vocab.kos.txt')
     end
 
     def shutdown

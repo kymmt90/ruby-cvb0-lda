@@ -76,4 +76,58 @@ class Cvb0LDATest < Test::Unit::TestCase
       assert_in_delta 1.0, sum, 0.00001
     end
   end
+
+  sub_test_case 'after setting up the model' do
+    setup do
+      @@sut.initialize_parameters
+    end
+
+    test 'the sum of theta for all topics is almost 1.0' do
+      1.upto(@@sut.num_docs) do |d|
+        sum = [*0...@@sut.num_topics].map { |t| @@sut.theta(d, t) }
+                                     .reduce(:+)
+        assert_in_delta 1.0, sum, 0.00001
+      end
+    end
+
+    test 'the doc index 0 for theta raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.theta(0, 0) }
+    end
+
+    test 'the doc index num_docs + 1 for theta raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.theta(@@sut.num_docs + 1, 0) }
+    end
+
+    test 'the topic index -1 for theta raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.theta(1, -1) }
+    end
+
+    test 'the topic index num_topics for theta raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.theta(1, @@sut.num_topics) }
+    end
+
+    test 'the sum of phi for all vocabs is almost 1.0' do
+      0.upto(@@sut.num_topics - 1) do |t|
+        sum = [*1..@@sut.num_vocabs].map { |v| @@sut.phi(t, v) }
+                                    .reduce(:+)
+        assert_in_delta 1.0, sum, 0.00001
+      end
+    end
+
+    test 'the topic index -1 for phi raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.phi(-1, 1) }
+    end
+
+    test 'the topic index num_topics for phi raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.phi(@@sut.num_topics, 1) }
+    end
+
+    test 'the vocab index 0 for phi raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.phi(0, 0) }
+    end
+
+    test 'the vocab index num_vocabs + 1 for phi raises ArgumentError' do
+      assert_raise_kind_of(ArgumentError) { @@sut.phi(0, @@sut.num_vocabs + 1) }
+    end
+  end
 end

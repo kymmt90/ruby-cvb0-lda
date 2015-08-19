@@ -80,11 +80,17 @@ class LDA
   end
 
   def theta(doc, topic)
+    if doc <= 0 || num_docs < doc || topic < 0 || @num_topics <= topic
+      raise ArgumentError
+    end
     denominator = @n_dt[doc].to_a.flatten.reduce(:+)
     @n_dt[doc][0, topic] / denominator
   end
 
   def phi(topic, vocab)
+    if topic < 0 || @num_topics <= topic || vocab <= 0 || num_vocabs < vocab
+      raise ArgumentError
+    end
     @n_vt[vocab][0, topic] / @n_t[0, topic]
   end
 
